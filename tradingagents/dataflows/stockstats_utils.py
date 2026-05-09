@@ -13,6 +13,18 @@ from .utils import safe_ticker_component
 logger = logging.getLogger(__name__)
 
 
+def create_yfinance_ticker(symbol: str) -> yf.Ticker:
+    """Create a yfinance Ticker using yfinance's default session handling.
+
+    Args:
+        symbol: Stock ticker symbol
+
+    Returns:
+        Configured yfinance.Ticker object
+    """
+    return yf.Ticker(symbol)
+
+
 def yf_retry(func, max_retries=3, base_delay=2.0):
     """Execute a yfinance call with exponential backoff on rate limits.
 
