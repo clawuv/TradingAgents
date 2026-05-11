@@ -26,6 +26,7 @@ from rich.rule import Rule
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
+from cli.config import CLI_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
 from cli.announcements import fetch_announcements, display_announcements
@@ -460,7 +461,11 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
+def get_user_selections(
+    *,
+    ticker_override: str | None = None,
+    analysis_date_override: str | None = None,
+):
     """Get all user selections before starting the analysis display."""
     # Display ASCII art welcome message
     with open(Path(__file__).parent / "static" / "welcome.txt", "r", encoding="utf-8") as f:
@@ -500,101 +505,204 @@ def get_user_selections():
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
     # Step 1: Ticker symbol
-    console.print(
-        create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
-            "SPY",
+    if ticker_override:
+        selected_ticker = normalize_ticker_symbol(ticker_override)
+        console.print(
+            Panel(
+                f"[bold]Ticker:[/bold] {selected_ticker}",
+                title="Step 1: CLI Ticker Override",
+                border_style="green",
+                padding=(1, 2),
+            )
         )
-    )
-    selected_ticker = get_ticker()
+    elif CLI_CONFIG.get("auto_use_default_ticker"):
+        selected_ticker = normalize_ticker_symbol(CLI_CONFIG["default_ticker"])
+        console.print(
+            Panel(
+                f"[bold]Ticker:[/bold] {selected_ticker}",
+                title="Step 1: Default Ticker",
+                border_style="green",
+                padding=(1, 2),
+            )
+        )
+    else:
+        console.print(
+            create_question_box(
+                "Step 1: Ticker Symbol",
+                "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
+                "SPY",
+            )
+        )
+        selected_ticker = get_ticker()
 
     # Step 2: Analysis date
-    default_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    console.print(
-        create_question_box(
-            "Step 2: Analysis Date",
-            "Enter the analysis date (YYYY-MM-DD)",
-            default_date,
+    if analysis_date_override:
+        analysis_date = analysis_date_override
+        console.print(
+            Panel(
+                f"[bold]Analysis date:[/bold] {analysis_date}",
+                title="Step 2: CLI Date Override",
+                border_style="blue",
+                padding=(1, 2),
+            )
         )
-    )
-    analysis_date = get_analysis_date()
+    elif CLI_CONFIG.get("auto_use_default_analysis_date"):
+        analysis_date = CLI_CONFIG["default_analysis_date"]
+        console.print(
+            Panel(
+                f"[bold]Analysis date:[/bold] {analysis_date}",
+                title="Step 2: Default Analysis Date",
+                border_style="blue",
+                padding=(1, 2),
+            )
+        )
+    else:
+        default_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        console.print(
+            create_question_box(
+                "Step 2: Analysis Date",
+                "Enter the analysis date (YYYY-MM-DD)",
+                default_date,
+            )
+        )
+        analysis_date = get_analysis_date()
 
     # Step 3: Output language
-    console.print(
-        create_question_box(
-            "Step 3: Output Language",
-            "Select the language for analyst reports and final decision"
+    if CLI_CONFIG.get("auto_use_default_output_language"):
+        output_language = CLI_CONFIG["default_output_language"]
+        console.print(
+            Panel(
+                f"[bold]Output language:[/bold] {output_language}",
+                title="Step 3: Default Output Language",
+                border_style="yellow",
+                padding=(1, 2),
+            )
         )
-    )
-    output_language = ask_output_language()
+    else:
+        console.print(
+            create_question_box(
+                "Step 3: Output Language",
+                "Select the language for analyst reports and final decision"
+            )
+        )
+        output_language = ask_output_language()
 
     # Step 4: Select analysts
-    console.print(
-        create_question_box(
-            "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+    if CLI_CONFIG.get("auto_use_default_analysts"):
+        selected_analysts = get_default_analysts(CLI_CONFIG["default_analysts"])
+        console.print(
+            Panel(
+                f"[bold]Selected analysts:[/bold] {', '.join(analyst.value for analyst in selected_analysts)}",
+                title="Step 4: Default Analysts Team",
+                border_style="green",
+                padding=(1, 2),
+            )
         )
-    )
-    selected_analysts = select_analysts()
-    console.print(
-        f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
-    )
+    else:
+        console.print(
+            create_question_box(
+                "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+            )
+        )
+        selected_analysts = select_analysts()
+        console.print(
+            f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
+        )
 
     # Step 5: Research depth
-    console.print(
-        create_question_box(
-            "Step 5: Research Depth", "Select your research depth level"
-        )
-    )
-    selected_research_depth = select_research_depth()
-
-    # Step 6: LLM Provider
-    console.print(
-        create_question_box(
-            "Step 6: LLM Provider", "Select your LLM provider"
-        )
-    )
-    selected_llm_provider, backend_url = select_llm_provider()
-
-    # Step 7: Thinking agents
-    console.print(
-        create_question_box(
-            "Step 7: Thinking Agents", "Select your thinking agents for analysis"
-        )
-    )
-    selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
-    selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
-
-    # Step 8: Provider-specific thinking configuration
-    thinking_level = None
-    reasoning_effort = None
-    anthropic_effort = None
-
-    provider_lower = selected_llm_provider.lower()
-    if provider_lower == "google":
+    if CLI_CONFIG.get("auto_use_default_research_depth"):
+        selected_research_depth = validate_research_depth(CLI_CONFIG["default_research_depth"])
         console.print(
-            create_question_box(
-                "Step 8: Thinking Mode",
-                "Configure Gemini thinking mode"
+            Panel(
+                f"[bold]Research depth:[/bold] {selected_research_depth}",
+                title="Step 5: Default Research Depth",
+                border_style="cyan",
+                padding=(1, 2),
             )
         )
-        thinking_level = ask_gemini_thinking_config()
-    elif provider_lower == "openai":
+    else:
         console.print(
             create_question_box(
-                "Step 8: Reasoning Effort",
-                "Configure OpenAI reasoning effort level"
+                "Step 5: Research Depth", "Select your research depth level"
             )
         )
-        reasoning_effort = ask_openai_reasoning_effort()
-    elif provider_lower == "anthropic":
+        selected_research_depth = select_research_depth()
+
+    if CLI_CONFIG.get("auto_use_default_llm_profile") and CLI_CONFIG.get("default_llm_provider"):
+        llm_profile = get_default_llm_profile(
+            DEFAULT_CONFIG,
+            CLI_CONFIG["default_llm_provider"],
+        )
+        selected_llm_provider = llm_profile["llm_provider"]
+        backend_url = llm_profile["backend_url"]
+        selected_shallow_thinker = llm_profile["shallow_thinker"]
+        selected_deep_thinker = llm_profile["deep_thinker"]
+        thinking_level = llm_profile["google_thinking_level"]
+        reasoning_effort = llm_profile["openai_reasoning_effort"]
+        anthropic_effort = llm_profile["anthropic_effort"]
+
+        console.print(
+            Panel(
+                "\n".join(
+                    [
+                        f"[bold]Provider:[/bold] {selected_llm_provider}",
+                        f"[bold]Quick model:[/bold] {selected_shallow_thinker}",
+                        f"[bold]Deep model:[/bold] {selected_deep_thinker}",
+                    ]
+                ),
+                title="Step 6-8: Default LLM Profile",
+                border_style="magenta",
+                padding=(1, 2),
+            )
+        )
+    else:
+        # Step 6: LLM Provider
         console.print(
             create_question_box(
-                "Step 8: Effort Level",
-                "Configure Claude effort level"
+                "Step 6: LLM Provider", "Select your LLM provider"
             )
         )
-        anthropic_effort = ask_anthropic_effort()
+        selected_llm_provider, backend_url = select_llm_provider()
+
+        # Step 7: Thinking agents
+        console.print(
+            create_question_box(
+                "Step 7: Thinking Agents", "Select your thinking agents for analysis"
+            )
+        )
+        selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
+        selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
+
+        # Step 8: Provider-specific thinking configuration
+        thinking_level = None
+        reasoning_effort = None
+        anthropic_effort = None
+
+        provider_lower = selected_llm_provider.lower()
+        if provider_lower == "google":
+            console.print(
+                create_question_box(
+                    "Step 8: Thinking Mode",
+                    "Configure Gemini thinking mode"
+                )
+            )
+            thinking_level = ask_gemini_thinking_config()
+        elif provider_lower == "openai":
+            console.print(
+                create_question_box(
+                    "Step 8: Reasoning Effort",
+                    "Configure OpenAI reasoning effort level"
+                )
+            )
+            reasoning_effort = ask_openai_reasoning_effort()
+        elif provider_lower == "anthropic":
+            console.print(
+                create_question_box(
+                    "Step 8: Effort Level",
+                    "Configure Claude effort level"
+                )
+            )
+            anthropic_effort = ask_anthropic_effort()
 
     return {
         "ticker": selected_ticker,
@@ -926,9 +1034,17 @@ def format_tool_args(args, max_length=80) -> str:
         return result[:max_length - 3] + "..."
     return result
 
-def run_analysis(checkpoint: bool = False):
+def run_analysis(
+    checkpoint: bool = False,
+    *,
+    ticker_override: str | None = None,
+    analysis_date_override: str | None = None,
+):
     # First get all user selections
-    selections = get_user_selections()
+    selections = get_user_selections(
+        ticker_override=ticker_override,
+        analysis_date_override=analysis_date_override,
+    )
 
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
@@ -1199,6 +1315,14 @@ def run_analysis(checkpoint: bool = False):
 
 @app.command()
 def analyze(
+    ticker: Optional[str] = typer.Argument(
+        None,
+        help="Ticker symbol to analyze. When omitted, the configured default ticker is used.",
+    ),
+    analysis_date: Optional[str] = typer.Argument(
+        None,
+        help="Analysis date in YYYY-MM-DD format. When omitted, the configured default date is used.",
+    ),
     checkpoint: bool = typer.Option(
         False,
         "--checkpoint",
@@ -1214,7 +1338,11 @@ def analyze(
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
-    run_analysis(checkpoint=checkpoint)
+    run_analysis(
+        checkpoint=checkpoint,
+        ticker_override=ticker,
+        analysis_date_override=analysis_date,
+    )
 
 
 if __name__ == "__main__":

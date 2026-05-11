@@ -10,6 +10,19 @@ console = Console()
 
 TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
 
+PROVIDERS = [
+    ("OpenAI", "openai", "https://api.openai.com/v1"),
+    ("Google", "google", None),
+    ("Anthropic", "anthropic", "https://api.anthropic.com/"),
+    ("xAI", "xai", "https://api.x.ai/v1"),
+    ("DeepSeek", "deepseek", "https://api.deepseek.com"),
+    ("Qwen", "qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+    ("GLM", "glm", "https://open.bigmodel.cn/api/paas/v4/"),
+    ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
+    ("Azure OpenAI", "azure", None),
+    ("Ollama", "ollama", "http://localhost:11434/v1"),
+]
+
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
     ("Social Media Analyst", AnalystType.SOCIAL),
@@ -102,6 +115,15 @@ def select_analysts() -> List[AnalystType]:
     return choices
 
 
+def get_default_analysts(default_analysts: List[str]) -> List[AnalystType]:
+    """Convert configured analyst keys to AnalystType values in display order."""
+    normalized = {item.strip().lower() for item in default_analysts if item.strip()}
+    selected = [value for _, value in ANALYST_ORDER if value.value in normalized]
+    if not selected:
+        raise ValueError("default_analysts must include at least one valid analyst key.")
+    return selected
+
+
 def select_research_depth() -> int:
     """Select research depth using an interactive selection."""
 
@@ -132,6 +154,13 @@ def select_research_depth() -> int:
         exit(1)
 
     return choice
+
+
+def validate_research_depth(value: int) -> int:
+    """Validate configured research depth."""
+    if value not in {1, 3, 5}:
+        raise ValueError("default_research_depth must be one of: 1, 3, 5.")
+    return value
 
 
 def _fetch_openrouter_models() -> List[Tuple[str, str]]:
@@ -230,20 +259,6 @@ def select_deep_thinking_agent(provider) -> str:
 
 def select_llm_provider() -> tuple[str, str | None]:
     """Select the LLM provider and its API endpoint."""
-    # (display_name, provider_key, base_url)
-    PROVIDERS = [
-        ("OpenAI", "openai", "https://api.openai.com/v1"),
-        ("Google", "google", None),
-        ("Anthropic", "anthropic", "https://api.anthropic.com/"),
-        ("xAI", "xai", "https://api.x.ai/v1"),
-        ("DeepSeek", "deepseek", "https://api.deepseek.com"),
-        ("Qwen", "qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-        ("GLM", "glm", "https://open.bigmodel.cn/api/paas/v4/"),
-        ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
-        ("Azure OpenAI", "azure", None),
-        ("Ollama", "ollama", "http://localhost:11434/v1"),
-    ]
-
     choice = questionary.select(
         "Select your LLM Provider:",
         choices=[
@@ -266,6 +281,29 @@ def select_llm_provider() -> tuple[str, str | None]:
 
     provider, url = choice
     return provider, url
+
+
+def get_provider_base_url(provider: str) -> str | None:
+    """Return the configured default base URL for a provider."""
+    provider_lower = provider.lower()
+    for _, provider_key, url in PROVIDERS:
+        if provider_key == provider_lower:
+            return url
+    raise ValueError(f"Unsupported provider: {provider}")
+
+
+def get_default_llm_profile(default_config: Dict, default_provider: str) -> Dict[str, str | None]:
+    """Build a non-interactive LLM selection profile from configured defaults."""
+    provider = default_provider.lower()
+    return {
+        "llm_provider": provider,
+        "backend_url": default_config.get("backend_url", get_provider_base_url(provider)),
+        "shallow_thinker": default_config["quick_think_llm"],
+        "deep_thinker": default_config["deep_think_llm"],
+        "google_thinking_level": default_config.get("google_thinking_level"),
+        "openai_reasoning_effort": default_config.get("openai_reasoning_effort"),
+        "anthropic_effort": default_config.get("anthropic_effort"),
+    }
 
 
 def ask_openai_reasoning_effort() -> str:
