@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.permissions import has_permission
 from app.core.db import get_db
 from app.models.user import User
 from app.services.auth_service import AuthService
@@ -25,3 +26,12 @@ def get_current_user(
     if user.status != "active":
         raise HTTPException(status_code=403, detail="user is disabled")
     return user
+
+
+def require_permission(permission: str):
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if not has_permission(current_user.role, permission):
+            raise HTTPException(status_code=403, detail=f"permission denied: {permission}")
+        return current_user
+
+    return dependency

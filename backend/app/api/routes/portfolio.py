@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import require_permission
 from app.core.db import get_db
 from app.services.portfolio_service import PortfolioService
 
 
-router = APIRouter(prefix="/v1/portfolio", tags=["portfolio"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/v1/portfolio", tags=["portfolio"], dependencies=[Depends(require_permission("positions.view"))])
 
 
 @router.get("")

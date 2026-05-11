@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import require_permission
 from app.core.db import get_db
 from app.services.account_service import AccountService
 
 
-router = APIRouter(prefix="/v1/accounts", tags=["accounts"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/v1/accounts", tags=["accounts"], dependencies=[Depends(require_permission("assets.view"))])
 
 
 @router.post("/bootstrap")

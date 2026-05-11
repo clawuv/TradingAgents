@@ -147,6 +147,22 @@ export interface LoginResponse {
 
 export interface UserListItem extends AuthUser {}
 
+export interface UserUpdateRequest {
+  name?: string
+  phone?: string
+  role?: 'super_admin' | 'risk_manager' | 'finance_operator' | 'auditor'
+  mfa_enabled?: boolean
+}
+
+export interface UserCreateRequest {
+  name: string
+  email: string
+  password: string
+  phone?: string
+  role: 'super_admin' | 'risk_manager' | 'finance_operator' | 'auditor'
+  mfa_enabled?: boolean
+}
+
 export function getStoredAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY)
 }
@@ -201,6 +217,21 @@ export async function logout() {
 
 export async function listUsers() {
   const { data } = await apiClient.get<UserListItem[]>('/v1/users')
+  return data
+}
+
+export async function updateUser(userId: number, payload: UserUpdateRequest) {
+  const { data } = await apiClient.patch<UserListItem>(`/v1/users/${userId}`, payload)
+  return data
+}
+
+export async function disableUser(userId: number) {
+  const { data } = await apiClient.post<UserListItem>(`/v1/users/${userId}/disable`, {})
+  return data
+}
+
+export async function createUser(payload: UserCreateRequest) {
+  const { data } = await apiClient.post<UserListItem>('/v1/users', payload)
   return data
 }
 

@@ -1,21 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import require_permission
 from app.core.db import get_db
 from app.schemas.order import OrderListItem
 from app.services.order_service import OrderService
 
 
-router = APIRouter(prefix="/v1/orders", tags=["orders"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/v1/orders", tags=["orders"])
 
 
-@router.get("", response_model=list[OrderListItem])
+@router.get("", response_model=list[OrderListItem], dependencies=[Depends(require_permission("orders.detail"))])
 def list_orders(db: Session = Depends(get_db)):
     return OrderService(db).list_orders()
 
 
-@router.post("/submit/{signal_id}")
+@router.post("/submit/{signal_id}", dependencies=[Depends(require_permission("exchange.placeOrder"))])
 def submit_order(signal_id: int, db: Session = Depends(get_db)):
     try:
         order = OrderService(db).submit_for_signal(signal_id)

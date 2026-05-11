@@ -2,8 +2,11 @@
 import { useEffect, useState } from 'react'
 import { ShieldAlert, ShieldCheck, UserPlus, UsersRound } from 'lucide-react'
 import DataTable, { type Column } from '@/components/common/DataTable'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/contexts/AuthContext'
-import { getApiErrorMessage, listUsers, type UserListItem } from '@/services/api'
+import { createUser, disableUser, getApiErrorMessage, listUsers, updateUser, type UserListItem } from '@/services/api'
 import { permissionLabels, type PermissionKey } from '@/mock/permission'
 
 const permissionGroups: { title: string; keys: PermissionKey[] }[] = [
@@ -26,33 +29,102 @@ export default function Users() {
   const [users, setUsers] = useState<UserListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '123456',
+    role: 'auditor' as UserListItem['role'],
+    mfa_enabled: false,
+  })
+
+  const loadUsers = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await listUsers()
+      setUsers(data)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
 
-    async function loadUsers() {
-      setLoading(true)
-      setError(null)
+    async function loadUsersSafely() {
       try {
-        const data = await listUsers()
-        if (cancelled) return
-        setUsers(data)
-      } catch (err) {
-        if (cancelled) return
-        setError(getApiErrorMessage(err))
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+        await loadUsers()
+      } catch {
+        // loadUsers already stores UI state
       }
     }
 
-    loadUsers()
+    loadUsersSafely()
 
     return () => {
       cancelled = true
     }
   }, [])
+
+  const handleEditUser = async (user: UserListItem) => {
+    const nextName = window.prompt('更新姓名', user.name)
+    if (nextName == null) return
+    const nextPhone = window.prompt('更新手机号', user.phone ?? '')
+    if (nextPhone == null) return
+
+    try {
+      await updateUser(user.id, { name: nextName, phone: nextPhone })
+      await loadUsers()
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    }
+  }
+
+  const handleDisableUser = async (user: UserListItem) => {
+    const confirmed = window.confirm(`确定要禁用用户 ${user.name} 吗？`)
+    if (!confirmed) return
+
+    try {
+      await disableUser(user.id)
+      await loadUsers()
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    }
+  }
+
+  const handleCreateUser = async () => {
+    setCreateSubmitting(true)
+    setError(null)
+    try {
+      await createUser({
+        name: createForm.name,
+        email: createForm.email,
+        phone: createForm.phone || undefined,
+        password: createForm.password,
+        role: createForm.role,
+        mfa_enabled: createForm.mfa_enabled,
+      })
+      setCreateOpen(false)
+      setCreateForm({
+        name: '',
+        email: '',
+        phone: '',
+        password: '123456',
+        role: 'auditor',
+        mfa_enabled: false,
+      })
+      await loadUsers()
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setCreateSubmitting(false)
+    }
+  }
 
   const columns: Column<UserListItem>[] = [
     { key: 'id', title: '用户ID', render: (row) => <span className="font-mono text-xs text-slate-600">USR-{String(row.id).padStart(4, '0')}</span> },
@@ -79,8 +151,8 @@ export default function Users() {
       title: '操作',
       render: (row) => (
         <div className="flex gap-2">
-          <button disabled={!can('users.edit')} className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => alert(`编辑用户：${row.id}`)}>编辑</button>
-          <button disabled={!can('users.disable') || row.id === currentUser?.id} className="rounded-lg bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => alert(`禁用用户：${row.id}`)}>禁用</button>
+          <button disabled={!can('users.edit')} className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => void handleEditUser(row)}>编辑</button>
+          <button disabled={!can('users.disable') || row.id === currentUser?.id} className="rounded-lg bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => void handleDisableUser(row)}>禁用</button>
         </div>
       ),
     },
@@ -133,7 +205,7 @@ export default function Users() {
               <p className="text-sm text-slate-500">来自 backend 的真实注册用户和管理员账号</p>
             </div>
           </div>
-          <button disabled={!can('users.create')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => alert('请使用注册页新增用户')}><UserPlus className="h-4 w-4" />新增用户</button>
+          <button disabled={!can('users.create')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => setCreateOpen(true)}><UserPlus className="h-4 w-4" />新增用户</button>
         </div>
 
         {error && (
@@ -146,6 +218,55 @@ export default function Users() {
         <DataTable columns={columns} data={users} showPagination={false} />
         {loading && <div className="text-sm text-slate-500">正在加载用户数据...</div>}
       </section>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>新增用户</DialogTitle>
+            <DialogDescription>在后台内直接创建用户账号，并分配初始角色。</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">姓名</span>
+              <Input value={createForm.name} onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">手机号</span>
+              <Input value={createForm.phone} onChange={(event) => setCreateForm((prev) => ({ ...prev, phone: event.target.value }))} />
+            </label>
+            <label className="space-y-2 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">邮箱</span>
+              <Input type="email" value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">初始密码</span>
+              <Input type="password" value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">角色</span>
+              <select className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400" value={createForm.role} onChange={(event) => setCreateForm((prev) => ({ ...prev, role: event.target.value as UserListItem['role'] }))}>
+                <option value="auditor">审计员</option>
+                <option value="finance_operator">财务运营</option>
+                <option value="risk_manager">风控经理</option>
+                {currentUser?.role === 'super_admin' && <option value="super_admin">超级管理员</option>}
+              </select>
+            </label>
+          </div>
+
+          <label className="mt-2 flex items-center gap-3 text-sm text-slate-700">
+            <input type="checkbox" checked={createForm.mfa_enabled} onChange={(event) => setCreateForm((prev) => ({ ...prev, mfa_enabled: event.target.checked }))} />
+            创建时启用 MFA 标记
+          </label>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>取消</Button>
+            <Button onClick={() => void handleCreateUser()} disabled={createSubmitting || !createForm.name || !createForm.email || !createForm.password}>
+              {createSubmitting ? '创建中...' : '创建用户'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

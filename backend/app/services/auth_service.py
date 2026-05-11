@@ -48,6 +48,35 @@ class AuthService:
         token = self.token_repo.create(user_id=user.id, token=generate_access_token())
         return token.token, user
 
+    def create_user(
+        self,
+        *,
+        actor: User,
+        name: str,
+        email: str,
+        password: str,
+        phone: str | None,
+        role: str,
+        mfa_enabled: bool,
+    ) -> User:
+        self.ensure_default_admin()
+        if self.user_repo.get_by_email(email) is not None:
+            raise ValueError("email already exists")
+
+        normalized_role = role if role in ALLOWED_ROLES else "auditor"
+        if normalized_role == "super_admin" and actor.role != "super_admin":
+            raise ValueError("only super admin can create another super admin")
+
+        return self.user_repo.create(
+            name=name,
+            email=email,
+            password_hash=hash_password(password),
+            phone=phone,
+            role=normalized_role,
+            status="active",
+            mfa_enabled=mfa_enabled,
+        )
+
     def login(self, *, email: str, password: str) -> tuple[str, User]:
         self.ensure_default_admin()
         user = self.user_repo.get_by_email(email)
@@ -73,3 +102,41 @@ class AuthService:
     def list_users(self) -> list[User]:
         self.ensure_default_admin()
         return self.user_repo.list_all()
+
+    def update_user(
+        self,
+        *,
+        actor: User,
+        user_id: int,
+        name: str | None,
+        phone: str | None,
+        role: str | None,
+        mfa_enabled: bool | None,
+    ) -> User:
+        user = self.user_repo.get(user_id)
+        if user is None:
+            raise ValueError("user not found")
+
+        if name is not None:
+            user.name = name
+        if phone is not None:
+            user.phone = phone
+        if mfa_enabled is not None:
+            user.mfa_enabled = mfa_enabled
+        if role is not None:
+            if role not in ALLOWED_ROLES:
+                raise ValueError("invalid role")
+            if actor.role != "super_admin":
+                raise ValueError("only super admin can change roles")
+            user.role = role
+
+        return self.user_repo.save(user)
+
+    def disable_user(self, *, actor: User, user_id: int) -> User:
+        user = self.user_repo.get(user_id)
+        if user is None:
+            raise ValueError("user not found")
+        if user.id == actor.id:
+            raise ValueError("cannot disable current user")
+        user.status = "disabled"
+        return self.user_repo.save(user)
