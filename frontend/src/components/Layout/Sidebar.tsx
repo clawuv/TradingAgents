@@ -59,10 +59,19 @@ export default function Sidebar({ open, collapsed, onClose, onToggleCollapse }: 
           <h1 className="text-lg font-bold tracking-tight text-white">交易后台</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button className="hidden rounded-xl border border-slate-800 bg-slate-900 p-2 text-slate-300 transition hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-cyan-200 lg:inline-flex" onClick={onToggleCollapse} title={collapsed ? '展开菜单' : '收起菜单'}>
+          <button
+            className="hidden h-10 w-10 items-center justify-center rounded-2xl text-slate-400 transition hover:bg-slate-900 hover:text-white lg:inline-flex"
+            onClick={onToggleCollapse}
+            title={collapsed ? '展开菜单' : '收起菜单'}
+          >
             <ToggleIcon className="h-4 w-4" />
           </button>
-          <button className="rounded-lg p-2 hover:bg-slate-900 lg:hidden" onClick={onClose}><X className="h-5 w-5" /></button>
+          <button
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-slate-400 transition hover:bg-slate-900 hover:text-white lg:hidden"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
       </div>
       <nav className={`space-y-4 overflow-y-auto pb-32 ${collapsed ? 'p-3' : 'p-4'}`}>

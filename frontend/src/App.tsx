@@ -38,9 +38,10 @@ const publicRoutes = ['/login', '/register']
 
 function ProtectedShell() {
   const [location, navigate] = useLocation()
-  const { isAuthenticated, can } = useAuth()
+  const { isAuthenticated, isLoading, can } = useAuth()
 
   useEffect(() => {
+    if (isLoading) return
     if (location === '/') {
       navigate(isAuthenticated ? '/dashboard' : '/login', { replace: true })
       return
@@ -53,8 +54,9 @@ function ProtectedShell() {
     if (isAuthenticated && required && !can(required)) {
       navigate('/dashboard', { replace: true })
     }
-  }, [location, navigate, isAuthenticated, can])
+  }, [location, navigate, isAuthenticated, can, isLoading])
 
+  if (isLoading) return null
   if (!isAuthenticated && !publicRoutes.includes(location) && location !== '/') return null
   if (publicRoutes.includes(location)) return <PublicRoutes />
 
@@ -79,13 +81,16 @@ function ProtectedShell() {
 
 function PublicRoutes() {
   const [location, navigate] = useLocation()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
 
   useEffect(() => {
+    if (isLoading) return
     if (isAuthenticated && publicRoutes.includes(location)) {
       navigate('/dashboard', { replace: true })
     }
-  }, [isAuthenticated, location, navigate])
+  }, [isAuthenticated, isLoading, location, navigate])
+
+  if (isLoading) return null
 
   return (
     <Switch>

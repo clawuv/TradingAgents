@@ -1,4 +1,5 @@
 from app.models.account import Account
+from app.models.auth_token import AuthToken
 from app.models.audit_event import AuditEvent
 from app.models.cash_ledger import CashLedgerEntry
 from app.models.fill import Fill
@@ -7,9 +8,11 @@ from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.position import Position
 from app.models.risk_decision import RiskDecision
 from app.models.signal import Signal
+from app.models.user import User
 
 __all__ = [
     "Account",
+    "AuthToken",
     "AuditEvent",
     "CashLedgerEntry",
     "Fill",
@@ -18,4 +21,5 @@ __all__ = [
     "Position",
     "RiskDecision",
     "Signal",
+    "User",
 ]

@@ -106,3 +106,31 @@ class OrderService:
         )
         self.db.refresh(order)
         return order
+
+    def list_orders(self) -> list[dict]:
+        orders = self.order_repo.list_all()
+        if not orders:
+            return []
+
+        order_ids = [order.id for order in orders]
+        fills = list(self.db.query(Fill).filter(Fill.order_id.in_(order_ids)).all())
+        fills_by_order = {fill.order_id: fill for fill in fills}
+
+        return [
+            {
+                "order_id": order.id,
+                "signal_id": order.signal_id,
+                "account_id": order.account_id,
+                "symbol": order.symbol,
+                "side": order.side,
+                "order_type": order.order_type,
+                "qty": order.qty,
+                "status": order.status,
+                "limit_price": order.limit_price,
+                "fill_price": fills_by_order.get(order.id).fill_price if fills_by_order.get(order.id) else None,
+                "fee": fills_by_order.get(order.id).fee if fills_by_order.get(order.id) else None,
+                "submitted_at": order.submitted_at.isoformat() if order.submitted_at else None,
+                "created_at": order.created_at.isoformat(),
+            }
+            for order in orders
+        ]

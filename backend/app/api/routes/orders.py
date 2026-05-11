@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.core.db import get_db
+from app.schemas.order import OrderListItem
 from app.services.order_service import OrderService
 
 
-router = APIRouter(prefix="/v1/orders", tags=["orders"])
+router = APIRouter(prefix="/v1/orders", tags=["orders"], dependencies=[Depends(get_current_user)])
+
+
+@router.get("", response_model=list[OrderListItem])
+def list_orders(db: Session = Depends(get_db)):
+    return OrderService(db).list_orders()
 
 
 @router.post("/submit/{signal_id}")

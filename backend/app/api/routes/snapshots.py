@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.core.db import get_db
 from app.services.portfolio_service import PortfolioService
 
 
-router = APIRouter(prefix="/v1/snapshots", tags=["snapshots"])
+router = APIRouter(prefix="/v1/snapshots", tags=["snapshots"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/create")
