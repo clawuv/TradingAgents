@@ -95,16 +95,72 @@ export interface OrderListItem {
 }
 
 export interface PositionView {
+  id?: number
+  account_id?: string
   symbol: string
   qty: number
   avg_cost: number
   market_price: number
   market_value: number
+  updated_at?: string
+}
+
+export interface PositionCreateRequest {
+  symbol: string
+  qty: number
+  avg_cost: number
+  market_price: number
+}
+
+export interface PositionUpdateRequest {
+  qty?: number
+  avg_cost?: number
+  market_price?: number
 }
 
 export interface PortfolioResponse {
   account_id: string
   positions: PositionView[]
+}
+
+export interface AssetItem {
+  id: number
+  account_id: string
+  asset_code: string
+  asset_name: string
+  category: string
+  quantity: number
+  frozen_quantity: number
+  unit_price: number
+  currency: string
+  status: string
+  note: string | null
+  valuation: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AssetCreateRequest {
+  asset_code: string
+  asset_name: string
+  category: string
+  quantity: number
+  frozen_quantity: number
+  unit_price: number
+  currency: string
+  status: string
+  note?: string
+}
+
+export interface AssetUpdateRequest {
+  asset_name?: string
+  category?: string
+  quantity?: number
+  frozen_quantity?: number
+  unit_price?: number
+  currency?: string
+  status?: string
+  note?: string
 }
 
 export interface SnapshotResponse {
@@ -115,6 +171,22 @@ export interface SnapshotResponse {
   net_exposure: number
   drawdown: number
   snapshot_at: string
+}
+
+export interface ResearchReportListItem {
+  id: string
+  title: string
+  ticker: string
+  report_date: string
+  generated_at: string
+  source_type: string
+  source_label: string
+  rating: string
+  summary: string
+}
+
+export interface ResearchReportDetail extends ResearchReportListItem {
+  content: string
 }
 
 export interface ApiErrorPayload {
@@ -267,6 +339,63 @@ export async function listOrders() {
 
 export async function getPortfolio() {
   const { data } = await apiClient.get<PortfolioResponse>('/v1/portfolio')
+  return data
+}
+
+export async function listPositions() {
+  const { data } = await apiClient.get<PositionView[]>('/v1/positions')
+  return data
+}
+
+export async function createPosition(payload: PositionCreateRequest) {
+  const { data } = await apiClient.post<PositionView>('/v1/positions', payload)
+  return data
+}
+
+export async function updatePosition(positionId: number, payload: PositionUpdateRequest) {
+  const { data } = await apiClient.patch<PositionView>(`/v1/positions/${positionId}`, payload)
+  return data
+}
+
+export async function deletePosition(positionId: number) {
+  const { data } = await apiClient.delete<{ status: string; position_id: number }>(`/v1/positions/${positionId}`)
+  return data
+}
+
+export async function listResearchReports() {
+  const { data } = await apiClient.get<ResearchReportListItem[]>('/v1/research/reports')
+  return data
+}
+
+export async function getResearchReport(reportId: string) {
+  const { data } = await apiClient.get<ResearchReportDetail>(`/v1/research/reports/${encodeURIComponent(reportId)}`)
+  return data
+}
+
+export async function downloadResearchReport(reportId: string) {
+  const { data } = await apiClient.get<string>(`/v1/research/reports/${encodeURIComponent(reportId)}/download`, {
+    responseType: 'text',
+  })
+  return data
+}
+
+export async function listAssets() {
+  const { data } = await apiClient.get<AssetItem[]>('/v1/assets')
+  return data
+}
+
+export async function createAsset(payload: AssetCreateRequest) {
+  const { data } = await apiClient.post<AssetItem>('/v1/assets', payload)
+  return data
+}
+
+export async function updateAsset(assetId: number, payload: AssetUpdateRequest) {
+  const { data } = await apiClient.patch<AssetItem>(`/v1/assets/${assetId}`, payload)
+  return data
+}
+
+export async function deleteAsset(assetId: number) {
+  const { data } = await apiClient.delete<{ status: string; asset_id: number }>(`/v1/assets/${assetId}`)
   return data
 }
 

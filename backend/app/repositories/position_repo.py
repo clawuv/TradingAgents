@@ -15,3 +15,23 @@ class PositionRepository:
     def get_by_account_symbol(self, account_id: str, symbol: str) -> Position | None:
         stmt = select(Position).where(Position.account_id == account_id, Position.symbol == symbol)
         return self.db.scalars(stmt).first()
+
+    def get(self, position_id: int) -> Position | None:
+        return self.db.get(Position, position_id)
+
+    def create(self, **kwargs) -> Position:
+        obj = Position(**kwargs)
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def save(self, obj: Position) -> Position:
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def delete(self, obj: Position) -> None:
+        self.db.delete(obj)
+        self.db.commit()

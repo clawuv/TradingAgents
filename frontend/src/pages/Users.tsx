@@ -1,6 +1,7 @@
 // 设计提醒：用户/权限页要同时展示真实用户列表与当前角色权限矩阵，突出 RBAC 控制逻辑。
 import { useEffect, useState } from 'react'
 import { ShieldAlert, ShieldCheck, UserPlus, UsersRound } from 'lucide-react'
+import { toast } from 'sonner'
 import DataTable, { type Column } from '@/components/common/DataTable'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -31,11 +32,23 @@ export default function Users() {
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [disableOpen, setDisableOpen] = useState(false)
+  const [disableSubmitting, setDisableSubmitting] = useState(false)
+  const [editingUserId, setEditingUserId] = useState<number | null>(null)
+  const [disablingUser, setDisablingUser] = useState<UserListItem | null>(null)
   const [createForm, setCreateForm] = useState({
     name: '',
     email: '',
     phone: '',
     password: '123456',
+    role: 'auditor' as UserListItem['role'],
+    mfa_enabled: false,
+  })
+  const [editForm, setEditForm] = useState({
+    name: '',
+    phone: '',
     role: 'auditor' as UserListItem['role'],
     mfa_enabled: false,
   })
@@ -71,29 +84,63 @@ export default function Users() {
     }
   }, [])
 
-  const handleEditUser = async (user: UserListItem) => {
-    const nextName = window.prompt('更新姓名', user.name)
-    if (nextName == null) return
-    const nextPhone = window.prompt('更新手机号', user.phone ?? '')
-    if (nextPhone == null) return
+  const openEditDialog = (user: UserListItem) => {
+    setEditingUserId(user.id)
+    setEditForm({
+      name: user.name,
+      phone: user.phone ?? '',
+      role: user.role,
+      mfa_enabled: user.mfa_enabled,
+    })
+    setEditOpen(true)
+  }
 
+  const openDisableDialog = (user: UserListItem) => {
+    setDisablingUser(user)
+    setDisableOpen(true)
+  }
+
+  const handleDisableUser = async () => {
+    if (disablingUser == null) return
+
+    setDisableSubmitting(true)
     try {
-      await updateUser(user.id, { name: nextName, phone: nextPhone })
+      await disableUser(disablingUser.id)
+      toast.success(`已禁用用户 ${disablingUser.name}`)
+      setDisableOpen(false)
+      setDisablingUser(null)
       await loadUsers()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      const message = getApiErrorMessage(err)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setDisableSubmitting(false)
     }
   }
 
-  const handleDisableUser = async (user: UserListItem) => {
-    const confirmed = window.confirm(`确定要禁用用户 ${user.name} 吗？`)
-    if (!confirmed) return
+  const handleEditUser = async () => {
+    if (editingUserId == null) return
 
+    setEditSubmitting(true)
+    setError(null)
     try {
-      await disableUser(user.id)
+      await updateUser(editingUserId, {
+        name: editForm.name,
+        phone: editForm.phone || undefined,
+        role: editForm.role,
+        mfa_enabled: editForm.mfa_enabled,
+      })
+      toast.success('用户信息已更新')
+      setEditOpen(false)
+      setEditingUserId(null)
       await loadUsers()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      const message = getApiErrorMessage(err)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setEditSubmitting(false)
     }
   }
 
@@ -109,6 +156,7 @@ export default function Users() {
         role: createForm.role,
         mfa_enabled: createForm.mfa_enabled,
       })
+      toast.success(`已创建用户 ${createForm.name}`)
       setCreateOpen(false)
       setCreateForm({
         name: '',
@@ -120,7 +168,9 @@ export default function Users() {
       })
       await loadUsers()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      const message = getApiErrorMessage(err)
+      setError(message)
+      toast.error(message)
     } finally {
       setCreateSubmitting(false)
     }
@@ -151,8 +201,8 @@ export default function Users() {
       title: '操作',
       render: (row) => (
         <div className="flex gap-2">
-          <button disabled={!can('users.edit')} className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => void handleEditUser(row)}>编辑</button>
-          <button disabled={!can('users.disable') || row.id === currentUser?.id} className="rounded-lg bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => void handleDisableUser(row)}>禁用</button>
+          <button disabled={!can('users.edit')} className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => openEditDialog(row)}>编辑</button>
+          <button disabled={!can('users.disable') || row.id === currentUser?.id} className="rounded-lg bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40" onClick={() => openDisableDialog(row)}>禁用</button>
         </div>
       ),
     },
@@ -263,6 +313,80 @@ export default function Users() {
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>取消</Button>
             <Button onClick={() => void handleCreateUser()} disabled={createSubmitting || !createForm.name || !createForm.email || !createForm.password}>
               {createSubmitting ? '创建中...' : '创建用户'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>编辑用户</DialogTitle>
+            <DialogDescription>更新用户资料、角色和 MFA 标记。角色调整会受后端权限约束。</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">姓名</span>
+              <Input value={editForm.name} onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">手机号</span>
+              <Input value={editForm.phone} onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))} />
+            </label>
+            <label className="space-y-2 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">角色</span>
+              <select className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400" value={editForm.role} onChange={(event) => setEditForm((prev) => ({ ...prev, role: event.target.value as UserListItem['role'] }))}>
+                <option value="auditor">审计员</option>
+                <option value="finance_operator">财务运营</option>
+                <option value="risk_manager">风控经理</option>
+                {currentUser?.role === 'super_admin' && <option value="super_admin">超级管理员</option>}
+              </select>
+            </label>
+          </div>
+
+          <label className="mt-2 flex items-center gap-3 text-sm text-slate-700">
+            <input type="checkbox" checked={editForm.mfa_enabled} onChange={(event) => setEditForm((prev) => ({ ...prev, mfa_enabled: event.target.checked }))} />
+            启用 MFA 标记
+          </label>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSubmitting}>取消</Button>
+            <Button onClick={() => void handleEditUser()} disabled={editSubmitting || !editForm.name}>
+              {editSubmitting ? '保存中...' : '保存修改'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={disableOpen} onOpenChange={setDisableOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>确认禁用用户</DialogTitle>
+            <DialogDescription>
+              {disablingUser
+                ? `禁用 ${disablingUser.name} 后，该用户将无法继续通过当前账号访问后台。`
+                : '确认要禁用这个用户吗？'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            这是一个真实后端操作，提交后会立即把用户状态切换为禁用。
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDisableOpen(false)
+                setDisablingUser(null)
+              }}
+              disabled={disableSubmitting}
+            >
+              取消
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDisableUser()} disabled={disableSubmitting}>
+              {disableSubmitting ? '禁用中...' : '确认禁用'}
             </Button>
           </DialogFooter>
         </DialogContent>

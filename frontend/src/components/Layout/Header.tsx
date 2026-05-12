@@ -35,9 +35,6 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden rounded-2xl px-3 py-2 text-sm font-medium text-slate-500 md:block">
-            {roleInfo.name}
-          </div>
           <button className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
             <Bell className="h-5 w-5" />
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500" />

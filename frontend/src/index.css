@@ -2,6 +2,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "streamdown/styles.css";
+
+@source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -86,4 +89,36 @@
     font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   button, select { font: inherit; }
+}
+
+@layer components {
+  .streamdown-body h1,
+  .streamdown-body h2,
+  .streamdown-body h3,
+  .streamdown-body h4 {
+    @apply font-bold tracking-tight text-slate-950;
+  }
+  .streamdown-body h1 { @apply text-3xl; }
+  .streamdown-body h2 { @apply mt-8 text-2xl; }
+  .streamdown-body h3 { @apply mt-6 text-xl; }
+  .streamdown-body p,
+  .streamdown-body li {
+    @apply text-slate-700;
+  }
+  .streamdown-body table {
+    @apply my-4 w-full border-collapse overflow-hidden rounded-xl text-sm;
+  }
+  .streamdown-body thead tr {
+    @apply bg-slate-100;
+  }
+  .streamdown-body th,
+  .streamdown-body td {
+    @apply border border-slate-200 px-3 py-2 align-top;
+  }
+  .streamdown-body code {
+    @apply rounded bg-slate-100 px-1.5 py-0.5 text-[0.9em];
+  }
+  .streamdown-body pre {
+    @apply overflow-x-auto rounded-2xl bg-slate-950 p-4 text-slate-100;
+  }
 }

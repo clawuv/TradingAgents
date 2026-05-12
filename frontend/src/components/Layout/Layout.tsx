@@ -9,7 +9,7 @@ const titles: Record<string, string> = {
   '/exchange': '买卖交易',
   '/positions': '持仓管理',
   '/orders': '订单管理',
-  '/assets': '资产',
+  '/assets': '资产管理',
   '/trades': '成交记录',
   '/research': '研报中心',
   '/news': '新闻资讯',

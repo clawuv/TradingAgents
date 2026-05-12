@@ -17,7 +17,7 @@ const menuGroups: { title: string; items: { path: string; label: string; icon: t
   {
     title: '资金与记录',
     items: [
-      { path: '/assets', label: '资产', icon: Wallet, permission: 'menu.assets' },
+      { path: '/assets', label: '资产管理', icon: Wallet, permission: 'menu.assets' },
       { path: '/trades', label: '成交记录', icon: History, permission: 'menu.trades' },
     ],
   },
@@ -77,7 +77,7 @@ export default function Sidebar({ open, collapsed, onClose, onToggleCollapse }: 
       <nav className={`space-y-4 overflow-y-auto pb-32 ${collapsed ? 'p-3' : 'p-4'}`}>
         {allowedGroups.map((group) => (
           <div key={group.title} className="space-y-2">
-            <div className={`px-4 ${collapsed ? 'lg:hidden' : ''}`}>
+            <div className={`pl-1 pr-4 text-left ${collapsed ? 'lg:hidden' : ''}`}>
               <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">{group.title}</span>
             </div>
             {group.items.map((item) => {
@@ -93,10 +93,10 @@ export default function Sidebar({ open, collapsed, onClose, onToggleCollapse }: 
           </div>
         ))}
       </nav>
-      <div className={`absolute bottom-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 transition-all ${collapsed ? 'left-3 right-3 hidden lg:block lg:p-3' : 'left-4 right-4'}`}>
-        <p className={`text-sm font-semibold text-cyan-200 ${collapsed ? 'lg:hidden' : ''}`}>权限控制已启用</p>
-        <p className={`mt-1 text-xs leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>菜单由当前角色的 menu.* 权限动态过滤。</p>
-        <ShieldCheck className={`mx-auto h-5 w-5 text-cyan-300 ${collapsed ? 'hidden lg:block' : 'hidden'}`} />
+      <div className={`absolute bottom-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 transition-all ${collapsed ? 'left-3 right-3 hidden lg:block lg:p-3' : 'left-4 right-4'}`}>
+        <p className={`text-sm font-semibold text-slate-200 ${collapsed ? 'lg:hidden' : ''}`}>权限控制已启用</p>
+        <p className={`mt-1 text-xs leading-5 text-slate-500 ${collapsed ? 'lg:hidden' : ''}`}>菜单由当前角色的 menu.* 权限动态过滤。</p>
+        <ShieldCheck className={`mx-auto h-5 w-5 text-slate-300 ${collapsed ? 'hidden lg:block' : 'hidden'}`} />
       </div>
     </aside>
   )
