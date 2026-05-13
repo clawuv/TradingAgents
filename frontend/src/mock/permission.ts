@@ -27,6 +27,8 @@ export type PermissionKey =
   | 'assets.freeze'
   | 'trades.export'
   | 'research.view'
+  | 'research.generate'
+  | 'research.cancel'
   | 'research.download'
   | 'research.bookmark'
   | 'news.view'
@@ -64,6 +66,8 @@ export const permissionLabels: Record<PermissionKey, string> = {
   'assets.freeze': '冻结资产',
   'trades.export': '导出成交记录',
   'research.view': '查看研报',
+  'research.generate': '生成研报',
+  'research.cancel': '取消研报任务',
   'research.download': '下载研报',
   'research.bookmark': '收藏研报',
   'news.view': '查看新闻',
@@ -81,19 +85,19 @@ export const mockRoles: { key: RoleKey; name: string; description: string; permi
     key: 'super_admin',
     name: '超级管理员',
     description: '拥有全部菜单和操作权限，适合系统负责人。',
-    permissions: ['menu.dashboard', 'menu.exchange', 'menu.positions', 'menu.orders', 'menu.assets', 'menu.trades', 'menu.research', 'menu.research', 'menu.news', 'menu.users', 'orders.detail', 'orders.cancel', 'assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.freeze', 'trades.export', 'users.view', 'users.create', 'users.edit', 'users.disable', 'roles.assign', 'exchange.placeOrder', 'positions.view', 'positions.create', 'positions.edit', 'positions.delete', 'positions.close', 'positions.risk', 'research.view', 'research.download', 'research.bookmark', 'news.view', 'news.bookmark', 'news.markRead'],
+    permissions: ['menu.dashboard', 'menu.exchange', 'menu.positions', 'menu.orders', 'menu.assets', 'menu.trades', 'menu.research', 'menu.research', 'menu.news', 'menu.users', 'orders.detail', 'orders.cancel', 'assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.freeze', 'trades.export', 'users.view', 'users.create', 'users.edit', 'users.disable', 'roles.assign', 'exchange.placeOrder', 'positions.view', 'positions.create', 'positions.edit', 'positions.delete', 'positions.close', 'positions.risk', 'research.view', 'research.generate', 'research.cancel', 'research.download', 'research.bookmark', 'news.view', 'news.bookmark', 'news.markRead'],
   },
   {
     key: 'risk_manager',
     name: '风控经理',
     description: '关注订单、成交和风险处置，可查看用户但不可分配角色。',
-    permissions: ['menu.dashboard', 'menu.exchange', 'menu.positions', 'menu.orders', 'menu.trades', 'menu.research', 'menu.news', 'menu.users', 'orders.detail', 'orders.cancel', 'trades.export', 'users.view', 'exchange.placeOrder', 'positions.view', 'positions.create', 'positions.edit', 'positions.delete', 'positions.close', 'positions.risk', 'research.view', 'research.download', 'research.bookmark', 'news.view', 'news.bookmark', 'news.markRead'],
+    permissions: ['menu.dashboard', 'menu.exchange', 'menu.positions', 'menu.orders', 'menu.trades', 'menu.research', 'menu.news', 'menu.users', 'orders.detail', 'orders.cancel', 'trades.export', 'users.view', 'exchange.placeOrder', 'positions.view', 'positions.create', 'positions.edit', 'positions.delete', 'positions.close', 'positions.risk', 'research.view', 'research.generate', 'research.cancel', 'research.download', 'research.bookmark', 'news.view', 'news.bookmark', 'news.markRead'],
   },
   {
     key: 'finance_operator',
     name: '财务运营',
     description: '负责资产核对与资金冻结，不进入用户管理。',
-    permissions: ['menu.dashboard', 'menu.positions', 'menu.assets', 'menu.trades', 'menu.research', 'menu.news', 'assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.freeze', 'positions.view', 'positions.create', 'positions.edit', 'positions.delete', 'research.view', 'news.view'],
+    permissions: ['menu.dashboard', 'menu.positions', 'menu.assets', 'menu.trades', 'menu.research', 'menu.news', 'assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.freeze', 'positions.view', 'positions.create', 'positions.edit', 'positions.delete', 'research.view', 'research.generate', 'research.cancel', 'news.view'],
   },
   {
     key: 'auditor',

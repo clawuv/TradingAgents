@@ -189,6 +189,32 @@ export interface ResearchReportDetail extends ResearchReportListItem {
   content: string
 }
 
+export interface ResearchGenerateRequest {
+  ticker: string
+  trade_date: string
+  output_language: string
+  llm_provider: string
+  quick_think_llm: string
+  deep_think_llm: string
+  max_debate_rounds: number
+  max_risk_discuss_rounds: number
+  checkpoint_enabled: boolean
+  selected_analysts: string[]
+}
+
+export interface ResearchJob {
+  id: string
+  user_id: number
+  ticker: string
+  trade_date: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  report_id: string | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
 export interface ApiErrorPayload {
   detail?: string
   error?: {
@@ -364,6 +390,26 @@ export async function deletePosition(positionId: number) {
 
 export async function listResearchReports(params?: { ticker?: string; date?: string }) {
   const { data } = await apiClient.get<ResearchReportListItem[]>('/v1/research/reports', { params })
+  return data
+}
+
+export async function generateResearchReport(payload: ResearchGenerateRequest) {
+  const { data } = await apiClient.post<ResearchJob>('/v1/research/reports/generate', payload)
+  return data
+}
+
+export async function listResearchJobs() {
+  const { data } = await apiClient.get<ResearchJob[]>('/v1/research/reports/jobs')
+  return data
+}
+
+export async function getResearchJob(jobId: string) {
+  const { data } = await apiClient.get<ResearchJob>(`/v1/research/reports/jobs/${encodeURIComponent(jobId)}`)
+  return data
+}
+
+export async function cancelResearchJob(jobId: string) {
+  const { data } = await apiClient.post<ResearchJob>(`/v1/research/reports/jobs/${encodeURIComponent(jobId)}/cancel`)
   return data
 }
 

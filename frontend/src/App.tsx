@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { ResearchNotificationsProvider } from '@/contexts/ResearchNotificationsContext'
 import Layout from '@/components/Layout/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Exchange from '@/pages/Exchange'
@@ -114,10 +115,12 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <AppRouter />
-          </TooltipProvider>
+          <ResearchNotificationsProvider>
+            <TooltipProvider>
+              <Toaster />
+              <AppRouter />
+            </TooltipProvider>
+          </ResearchNotificationsProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
