@@ -362,8 +362,8 @@ export async function deletePosition(positionId: number) {
   return data
 }
 
-export async function listResearchReports() {
-  const { data } = await apiClient.get<ResearchReportListItem[]>('/v1/research/reports')
+export async function listResearchReports(params?: { ticker?: string; date?: string }) {
+  const { data } = await apiClient.get<ResearchReportListItem[]>('/v1/research/reports', { params })
   return data
 }
 

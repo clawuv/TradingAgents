@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app.api.deps import require_permission
@@ -31,8 +31,11 @@ def serialize_report_detail(report) -> ResearchReportDetail:
 
 
 @router.get("", response_model=list[ResearchReportListItem], dependencies=[Depends(require_permission("research.view"))])
-def list_research_reports():
-    return [serialize_report_list_item(report) for report in ResearchService().list_reports()]
+def list_research_reports(
+    ticker: str | None = Query(None, description="按标的代码筛选"),
+    date: str | None = Query(None, description="按报告日期筛选 (YYYY-MM-DD)"),
+):
+    return [serialize_report_list_item(report) for report in ResearchService().list_reports(ticker=ticker, report_date=date)]
 
 
 @router.get("/{report_id}", response_model=ResearchReportDetail, dependencies=[Depends(require_permission("research.view"))])

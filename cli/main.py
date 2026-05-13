@@ -1293,8 +1293,10 @@ def run_analysis(
     # Prompt to save report
     save_choice = typer.prompt("Save report?", default="Y").strip().upper()
     if save_choice in ("Y", "YES", ""):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
+        now = datetime.datetime.now()
+        date_part = now.strftime("%Y%m%d")
+        time_part = now.strftime("%H%M%S")
+        default_path = Path.cwd() / "reports" / date_part / f"{selections['ticker']}_{time_part}"
         save_path_str = typer.prompt(
             "Save path (press Enter for default)",
             default=str(default_path)

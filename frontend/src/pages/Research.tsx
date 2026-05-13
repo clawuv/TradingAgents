@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Bookmark, BookOpenCheck, Download, Eye, FileText, Search, Sparkles, TrendingUp } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Bookmark, BookOpenCheck, Calendar, Download, Eye, FileText, Search, Sparkles, TrendingUp } from 'lucide-react'
 import { Streamdown } from 'streamdown'
 import { toast } from 'sonner'
 import StatCard from '@/components/common/StatCard'
@@ -21,6 +21,8 @@ const ratings = ['全部', '看多', '中性', '谨慎', '未知'] as const
 export default function Research() {
   const { can } = useAuth()
   const [keyword, setKeyword] = useState('')
+  const [tickerFilter, setTickerFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
   const [rating, setRating] = useState<(typeof ratings)[number]>('全部')
   const [reports, setReports] = useState<ResearchReportListItem[]>([])
   const [selected, setSelected] = useState<ResearchReportDetail | null>(null)
@@ -31,11 +33,16 @@ export default function Research() {
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set())
   const [previewOpen, setPreviewOpen] = useState(false)
 
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const items = await listResearchReports()
+      const params: { ticker?: string; date?: string } = {}
+      const t = tickerFilter.trim().toUpperCase()
+      if (t) params.ticker = t
+      const d = dateFilter.trim()
+      if (d) params.date = d
+      const items = await listResearchReports(params)
       setReports(items)
       setSelected(null)
     } catch (err) {
@@ -43,11 +50,11 @@ export default function Research() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [tickerFilter, dateFilter])
 
   useEffect(() => {
     void loadReports()
-  }, [])
+  }, [loadReports])
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase()
@@ -202,7 +209,31 @@ export default function Research() {
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">研报中心</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">直接读取 TradingAgents 生成的真实 Markdown 报告。列表视图负责检索和筛选，报告内容通过右侧抽屉展开。</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px] xl:w-[560px]">
+          <div className="grid gap-3 sm:grid-cols-[160px_180px_1fr_220px] xl:w-[780px]">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-600">标的代码</span>
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  value={tickerFilter}
+                  onChange={(e) => setTickerFilter(e.target.value)}
+                  placeholder="如 NVDA"
+                />
+              </div>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-600">报告日期</span>
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <Calendar className="h-4 w-4 text-slate-400" />
+                <input
+                  type="date"
+                  className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              </div>
+            </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-600">关键词搜索</span>
               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
@@ -211,7 +242,7 @@ export default function Research() {
                   className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
-                  placeholder="搜索标题、摘要或标的代码"
+                  placeholder="搜索标题、摘要"
                 />
               </div>
             </label>
@@ -237,7 +268,7 @@ export default function Research() {
       </section>
 
       <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
-        <SheetContent side="right" className="w-full border-l border-slate-200 bg-slate-50 p-0 sm:max-w-3xl">
+        <SheetContent side="right" className="w-full border-l border-slate-200 bg-slate-50 p-0 sm:max-w-6xl">
           <SheetHeader className="border-b border-slate-200 bg-white px-6 py-5">
             <div className="pr-10">
               <div className="mb-3 flex flex-wrap items-center gap-3">

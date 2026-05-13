@@ -25,5 +25,5 @@ CLI_CONFIG = {
     "default_research_depth": DEFAULT_RESEARCH_DEPTH,
     "auto_use_default_research_depth": True,
     "default_ticker": DEFAULT_TICKER,
-    "auto_use_default_ticker": True,
+    "auto_use_default_ticker": False,
 }

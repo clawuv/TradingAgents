@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKSPACE_REPORTS_DIR = REPO_ROOT / "tradingagents" / "reports"
 HOME_LOGS_DIR = Path.home() / ".tradingagents" / "logs"
 
-COMPLETE_REPORT_DIR_RE = re.compile(r"^(?P<ticker>.+)_(?P<date>\d{8})_\d{6}$")
+COMPLETE_REPORT_DIR_RE = re.compile(r"^(?P<ticker>.+)_(?P<time>\d{6})$")
 RATING_RE = re.compile(r"\*\*Rating\*\*:\s*([A-Za-z]+)|Rating:\s*\**([A-Za-z]+)\**", re.IGNORECASE)
 EXECUTIVE_SUMMARY_RE = re.compile(r"\*\*Executive Summary\*\*:\s*(.+)")
 
@@ -30,8 +30,18 @@ class ResearchReportRecord:
 
 
 class ResearchService:
-    def list_reports(self) -> list[ResearchReportRecord]:
+    def list_reports(
+        self,
+        *,
+        ticker: str | None = None,
+        report_date: str | None = None,
+    ) -> list[ResearchReportRecord]:
         reports = self._load_reports()
+        if ticker:
+            ticker_upper = ticker.strip().upper()
+            reports = [r for r in reports if r.ticker == ticker_upper]
+        if report_date:
+            reports = [r for r in reports if r.report_date == report_date]
         return sorted(reports, key=lambda item: item.generated_at, reverse=True)
 
     def get_report(self, report_id: str) -> ResearchReportRecord | None:
@@ -45,13 +55,12 @@ class ResearchService:
         complete_keys: set[tuple[str, str]] = set()
 
         if WORKSPACE_REPORTS_DIR.exists():
-          for report_file in sorted(WORKSPACE_REPORTS_DIR.glob("*/complete_report.md")):
+          for report_file in sorted(WORKSPACE_REPORTS_DIR.glob("*/*/complete_report.md")):
                 report = self._build_complete_report(report_file)
                 if report is None:
                     continue
                 reports.append(report)
                 complete_keys.add((report.ticker.upper(), report.report_date))
-
         if HOME_LOGS_DIR.exists():
             for ticker_dir in sorted(path for path in HOME_LOGS_DIR.iterdir() if path.is_dir()):
                 for date_dir in sorted(path for path in ticker_dir.iterdir() if path.is_dir()):
@@ -70,7 +79,11 @@ class ResearchService:
             return None
 
         ticker = match.group("ticker").upper()
-        report_date = datetime.strptime(match.group("date"), "%Y%m%d").strftime("%Y-%m-%d")
+        date_dir_name = report_file.parent.parent.name
+        try:
+            report_date = datetime.strptime(date_dir_name, "%Y%m%d").strftime("%Y-%m-%d")
+        except ValueError:
+            return None
         content = report_file.read_text(encoding="utf-8")
         generated_at = self._extract_generated_at(content) or self._format_timestamp(report_file.stat().st_mtime)
 
