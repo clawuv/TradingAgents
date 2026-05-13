@@ -1,5 +1,5 @@
 // 设计提醒：新闻页是行情事件雷达，强调时效、影响级别、关联标的和快速处置状态。
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { BellRing, Bookmark, CheckCircle2, Eye, Newspaper, Radio, Search, SlidersHorizontal, Zap } from 'lucide-react'
 import StatCard from '@/components/common/StatCard'
 import DataTable, { type Column } from '@/components/common/DataTable'
@@ -34,8 +34,28 @@ export default function News() {
   const [timeRange, setTimeRange] = useState<(typeof timeRanges)[number]>('全部时间')
   const [pinImportant, setPinImportant] = useState(true)
   const [selected, setSelected] = useState<NewsItem>(mockNewsItems[0])
-  const [readIds, setReadIds] = useState(() => new Set(mockNewsItems.filter((item) => item.read).map((item) => item.id)))
-  const [bookmarkIds, setBookmarkIds] = useState(() => new Set(mockNewsItems.filter((item) => item.bookmarked).map((item) => item.id)))
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('news_readIds')
+      if (stored) return new Set(JSON.parse(stored))
+    } catch {}
+    return new Set(mockNewsItems.filter((item) => item.read).map((item) => item.id))
+  })
+  const [bookmarkIds, setBookmarkIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('news_bookmarkIds')
+      if (stored) return new Set(JSON.parse(stored))
+    } catch {}
+    return new Set(mockNewsItems.filter((item) => item.bookmarked).map((item) => item.id))
+  })
+
+  useEffect(() => {
+    localStorage.setItem('news_readIds', JSON.stringify([...readIds]))
+  }, [readIds])
+
+  useEffect(() => {
+    localStorage.setItem('news_bookmarkIds', JSON.stringify([...bookmarkIds]))
+  }, [bookmarkIds])
   const [message, setMessage] = useState('')
 
   const filtered = useMemo(() => {
@@ -61,6 +81,9 @@ export default function News() {
   const preview = (item: NewsItem) => {
     setSelected(item)
     setMessage(`正在查看新闻：${item.title}`)
+    if (can('news.markRead') && !readIds.has(item.id)) {
+      setReadIds((prev) => new Set(prev).add(item.id))
+    }
   }
 
   const markRead = (item: NewsItem) => {
@@ -143,7 +166,7 @@ export default function News() {
             <Info label="时间" value={selected.publishedAt.slice(5)} />
           </div>
           <div className="mt-5 flex flex-wrap gap-2">{selected.symbols.map((symbol) => <span key={symbol} className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">{symbol}</span>)}</div>
-          <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600"><Radio className="mr-2 inline h-4 w-4 text-cyan-600" />模拟功能：详情预览会切换右侧内容；已读和收藏状态保存在当前前端会话中。</div>
+          <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600"><Radio className="mr-2 inline h-4 w-4 text-cyan-600" />提示：详情预览会切换右侧内容；已读和收藏状态已实现本地缓存持久化。</div>
         </div>
       </section>
 
