@@ -25,6 +25,93 @@ RATING_RE = re.compile(r"\*\*Rating\*\*:\s*([A-Za-z]+)|Rating:\s*\**([A-Za-z]+)\
 EXECUTIVE_SUMMARY_RE = re.compile(r"\*\*Executive Summary\*\*:\s*(.+)")
 RUNNING_PROCESSES: dict[str, subprocess.Popen[str]] = {}
 
+COMPLETE_ANALYSIS_SECTION_SPECS = [
+    (
+        "1_analysts",
+        "1_analysts",
+        [
+            ("market.md", "市场分析师"),
+            ("sentiment.md", "社媒分析师"),
+            ("news.md", "新闻分析师"),
+            ("fundamentals.md", "基本面分析师"),
+        ],
+    ),
+    (
+        "2_research",
+        "2_research",
+        [
+            ("bull.md", "多头研究员"),
+            ("bear.md", "空头研究员"),
+            ("manager.md", "研究经理"),
+        ],
+    ),
+    (
+        "3_trading",
+        "3_trading",
+        [
+            ("trader.md", "交易员"),
+        ],
+    ),
+    (
+        "4_risk",
+        "4_risk",
+        [
+            ("aggressive.md", "激进风险分析师"),
+            ("conservative.md", "保守风险分析师"),
+            ("neutral.md", "中性风险分析师"),
+        ],
+    ),
+    (
+        "5_portfolio",
+        "5_portfolio",
+        [
+            ("decision.md", "组合经理"),
+        ],
+    ),
+]
+
+RUNTIME_ANALYSIS_SECTION_SPECS = [
+    (
+        "1_analysts",
+        "1_analysts",
+        [
+            ("market_report.md", "市场分析师"),
+            ("sentiment_report.md", "社媒分析师"),
+            ("news_report.md", "新闻分析师"),
+            ("fundamentals_report.md", "基本面分析师"),
+        ],
+    ),
+    (
+        "2_research",
+        "2_research",
+        [
+            ("investment_plan.md", "研究团队决策"),
+        ],
+    ),
+    (
+        "3_trading",
+        "3_trading",
+        [
+            ("trader_investment_plan.md", "交易团队计划"),
+        ],
+    ),
+    (
+        "5_portfolio",
+        "5_portfolio",
+        [
+            ("final_trade_decision.md", "组合管理决策"),
+        ],
+    ),
+]
+
+
+@dataclass
+class ResearchAnalysisSectionRecord:
+    key: str
+    title: str
+    document_count: int
+    content: str
+
 
 @dataclass
 class ResearchReportRecord:
@@ -38,6 +125,7 @@ class ResearchReportRecord:
     rating: str
     summary: str
     content: str
+    analysis_sections: list[ResearchAnalysisSectionRecord]
 
 
 class ResearchService:
@@ -162,7 +250,7 @@ class ResearchService:
         complete_keys: set[tuple[str, str]] = set()
 
         if WORKSPACE_REPORTS_DIR.exists():
-          for report_file in sorted(WORKSPACE_REPORTS_DIR.glob("*/*/complete_report.md")):
+            for report_file in sorted(WORKSPACE_REPORTS_DIR.glob("*/*/complete_report.md")):
                 report = self._build_complete_report(report_file)
                 if report is None:
                     continue
@@ -205,6 +293,7 @@ class ResearchService:
             rating=self._extract_rating(content),
             summary=self._extract_summary(content),
             content=content,
+            analysis_sections=self._build_analysis_sections_from_directory(report_file.parent),
         )
 
     def _build_runtime_report(self, ticker: str, date_dir: Path) -> ResearchReportRecord | None:
@@ -252,7 +341,61 @@ class ResearchService:
             rating=self._extract_rating(content),
             summary=self._extract_summary(content),
             content=content,
+            analysis_sections=self._build_analysis_sections_from_runtime_reports(reports_dir),
         )
+
+    def _build_analysis_sections_from_directory(self, report_dir: Path) -> list[ResearchAnalysisSectionRecord]:
+        sections: list[ResearchAnalysisSectionRecord] = []
+        for key, title, documents in COMPLETE_ANALYSIS_SECTION_SPECS:
+            parts = [f"# {title}", ""]
+            count = 0
+            section_dir = report_dir / key
+            for file_name, label in documents:
+                file_path = section_dir / file_name
+                if not file_path.exists():
+                    continue
+                body = file_path.read_text(encoding="utf-8").strip()
+                if not body:
+                    continue
+                count += 1
+                parts.extend([f"## {label}", "", body, ""])
+            if count == 0:
+                continue
+            sections.append(
+                ResearchAnalysisSectionRecord(
+                    key=key,
+                    title=title,
+                    document_count=count,
+                    content="\n".join(parts).strip(),
+                )
+            )
+        return sections
+
+    def _build_analysis_sections_from_runtime_reports(self, reports_dir: Path) -> list[ResearchAnalysisSectionRecord]:
+        sections: list[ResearchAnalysisSectionRecord] = []
+        for key, title, documents in RUNTIME_ANALYSIS_SECTION_SPECS:
+            parts = [f"# {title}", ""]
+            count = 0
+            for file_name, label in documents:
+                file_path = reports_dir / file_name
+                if not file_path.exists():
+                    continue
+                body = file_path.read_text(encoding="utf-8").strip()
+                if not body:
+                    continue
+                count += 1
+                parts.extend([f"## {label}", "", body, ""])
+            if count == 0:
+                continue
+            sections.append(
+                ResearchAnalysisSectionRecord(
+                    key=key,
+                    title=title,
+                    document_count=count,
+                    content="\n".join(parts).strip(),
+                )
+            )
+        return sections
 
     def _extract_generated_at(self, content: str) -> str | None:
         for line in content.splitlines():

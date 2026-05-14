@@ -3,7 +3,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.api.deps import get_current_user, require_permission
 from app.models.user import User
-from app.schemas.research import ResearchGenerateRequest, ResearchJobResponse, ResearchReportDetail, ResearchReportListItem
+from app.schemas.research import ResearchAnalysisSection, ResearchGenerateRequest, ResearchJobResponse, ResearchReportDetail, ResearchReportListItem
 from app.services.research_service import ResearchService
 
 
@@ -28,6 +28,15 @@ def serialize_report_detail(report) -> ResearchReportDetail:
     return ResearchReportDetail(
         **serialize_report_list_item(report).model_dump(),
         content=report.content,
+        analysis_sections=[
+            ResearchAnalysisSection(
+                key=section.key,
+                title=section.title,
+                document_count=section.document_count,
+                content=section.content,
+            )
+            for section in report.analysis_sections
+        ],
     )
 
 

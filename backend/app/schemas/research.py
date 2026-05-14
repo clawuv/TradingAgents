@@ -26,8 +26,16 @@ class ResearchReportListItem(BaseModel):
     summary: str
 
 
+class ResearchAnalysisSection(BaseModel):
+    key: str
+    title: str
+    document_count: int
+    content: str
+
+
 class ResearchReportDetail(ResearchReportListItem):
     content: str
+    analysis_sections: list[ResearchAnalysisSection] = Field(default_factory=list)
 
 
 class ResearchGenerateResponse(BaseModel):

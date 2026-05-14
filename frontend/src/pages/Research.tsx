@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bookmark, BookOpenCheck, Bot, Calendar, Download, Eye, FileText, Plus, Radio, RefreshCw, Search, Settings2, Sparkles, TrendingUp } from 'lucide-react'
+import { Bookmark, BookOpenCheck, Bot, Calendar, ChevronDown, Download, Eye, FileText, Plus, Radio, RefreshCw, Search, Settings2, Sparkles, TrendingUp } from 'lucide-react'
 import { Streamdown } from 'streamdown'
 import { toast } from 'sonner'
 import StatCard from '@/components/common/StatCard'
 import DataTable, { type Column } from '@/components/common/DataTable'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,6 +15,7 @@ import {
   downloadResearchReport,
   generateResearchReport,
   getApiErrorMessage,
+  type ResearchAnalysisSection,
   getResearchReport,
   listResearchReports,
   type ResearchReportDetail,
@@ -30,6 +32,13 @@ const analystOptions = [
   { key: 'social', label: '社媒分析师' },
   { key: 'news', label: '新闻分析师' },
   { key: 'fundamentals', label: '基本面分析师' },
+] as const
+const analysisStageOptions = [
+  { key: '1_analysts', label: '1_analysts' },
+  { key: '2_research', label: '2_research' },
+  { key: '3_trading', label: '3_trading' },
+  { key: '4_risk', label: '4_risk' },
+  { key: '5_portfolio', label: '5_portfolio' },
 ] as const
 
 export default function Research() {
@@ -48,8 +57,12 @@ export default function Research() {
   const [message, setMessage] = useState('')
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set())
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisSection, setAnalysisSection] = useState<ResearchAnalysisSection | null>(null)
+  const [analysisReportTitle, setAnalysisReportTitle] = useState('')
 
   const [generateTicker, setGenerateTicker] = useState('')
   const [generateDate, setGenerateDate] = useState(new Date().toISOString().slice(0, 10))
@@ -148,6 +161,31 @@ export default function Research() {
       toast.error(msg)
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  const openAnalysisSection = async (report: ResearchReportListItem, sectionKey: string) => {
+    setAnalysisLoading(true)
+    setAnalysisOpen(true)
+    try {
+      const detail = await getResearchReport(report.id)
+      const section = detail.analysis_sections.find((item) => item.key === sectionKey)
+      if (!section) {
+        setAnalysisSection(null)
+        setAnalysisReportTitle(report.title)
+        toast.error(`${report.title} 暂无 ${sectionKey} 过程研报`)
+        return
+      }
+      setAnalysisSection(section)
+      setAnalysisReportTitle(report.title)
+      setMessage(`正在查看 ${report.title} · ${section.title}`)
+    } catch (err) {
+      const msg = getApiErrorMessage(err)
+      setError(msg)
+      setAnalysisSection(null)
+      toast.error(msg)
+    } finally {
+      setAnalysisLoading(false)
     }
   }
 
@@ -299,6 +337,21 @@ export default function Research() {
             <Download className="mr-1 inline h-4 w-4" />
             下载
           </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                分析
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44 rounded-xl border-slate-200 bg-white">
+              {analysisStageOptions.map((item) => (
+                <DropdownMenuItem key={item.key} onClick={() => void openAnalysisSection(row, item.key)} className="cursor-pointer rounded-lg">
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             disabled={!can('research.bookmark')}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -511,6 +564,50 @@ export default function Research() {
                 </Button>
               )}
             </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={analysisOpen} onOpenChange={setAnalysisOpen}>
+        <SheetContent side="right" className="w-full border-l border-slate-200 bg-slate-50 p-0 sm:max-w-5xl">
+          <SheetHeader className="border-b border-slate-200 bg-white px-6 py-5">
+            <div className="pr-10">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                {analysisSection && <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">{analysisSection.title}</span>}
+                {analysisSection && (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                    {analysisSection.document_count} 份过程文档
+                  </span>
+                )}
+              </div>
+              <SheetTitle className="text-2xl font-bold tracking-tight text-slate-950">{analysisReportTitle || '过程研报分析'}</SheetTitle>
+              <SheetDescription className="mt-2 text-sm leading-6 text-slate-500">
+                {analysisSection
+                  ? `当前展示 ${analysisSection.title} 阶段的过程研报，内容来自 TradingAgents 分阶段输出。`
+                  : '选择某个分析阶段后，这里会展示对应的过程研报内容。'}
+              </SheetDescription>
+            </div>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            {analysisLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">正在加载过程研报...</div>
+            ) : analysisSection ? (
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <p className="text-sm leading-7 text-slate-600">
+                    这里展示的是 {analysisSection.title} 阶段的完整过程研报，便于查看分析师、研究、交易、风险和组合管理在不同阶段的具体输出。
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="streamdown-body text-sm leading-7 text-slate-700">
+                    <Streamdown>{analysisSection.content}</Streamdown>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">当前报告没有找到对应阶段的过程研报。</div>
+            )}
           </div>
         </SheetContent>
       </Sheet>

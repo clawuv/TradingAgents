@@ -185,8 +185,16 @@ export interface ResearchReportListItem {
   summary: string
 }
 
+export interface ResearchAnalysisSection {
+  key: string
+  title: string
+  document_count: number
+  content: string
+}
+
 export interface ResearchReportDetail extends ResearchReportListItem {
   content: string
+  analysis_sections: ResearchAnalysisSection[]
 }
 
 export interface ResearchGenerateRequest {
