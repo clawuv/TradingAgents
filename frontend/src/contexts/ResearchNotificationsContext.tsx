@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { getApiErrorMessage, listResearchJobs, type ResearchJob } from '@/services/api'
+import { getApiErrorMessage, getResearchWsUrl, getStoredAuthToken, listResearchJobs, type ResearchJob } from '@/services/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 type ResearchNotificationsContextValue = {
@@ -20,6 +20,10 @@ export function ResearchNotificationsProvider({ children }: { children: React.Re
   const [jobs, setJobs] = useState<ResearchJob[]>([])
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set())
   const previousStatusesRef = useRef<Record<string, string>>({})
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttemptRef = useRef(0)
+  const mountedRef = useRef(true)
 
   const refreshJobs = useCallback(async () => {
     if (!isAuthenticated) {
@@ -53,15 +57,13 @@ export function ResearchNotificationsProvider({ children }: { children: React.Re
   }, [])
 
   useEffect(() => {
-    if (isLoading) return
-    void refreshJobs()
-    if (!isAuthenticated) return
-    const timer = window.setInterval(() => {
-      void refreshJobs()
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [isAuthenticated, isLoading, refreshJobs])
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
+  // Status-change toast detection
   useEffect(() => {
     const previousStatuses = previousStatusesRef.current
     for (const job of jobs) {
@@ -79,11 +81,78 @@ export function ResearchNotificationsProvider({ children }: { children: React.Re
     }
   }, [jobs])
 
+  // WebSocket connection management
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return
+
+    void refreshJobs()
+
+    const connect = () => {
+      const token = getStoredAuthToken()
+      if (!token || !mountedRef.current) return
+
+      const ws = new WebSocket(getResearchWsUrl(token))
+      wsRef.current = ws
+
+      ws.onmessage = (event) => {
+        try {
+          const job: ResearchJob = JSON.parse(event.data)
+          upsertJob(job)
+        } catch {
+          // ignore malformed messages
+        }
+      }
+
+      ws.onclose = (event) => {
+        wsRef.current = null
+        if (!mountedRef.current) return
+        // Auth failure — don't reconnect
+        if (event.code === 4001) return
+        // Reconnect with exponential backoff
+        const delay = Math.min(3000 * Math.pow(2, reconnectAttemptRef.current), 30000)
+        reconnectAttemptRef.current += 1
+        reconnectTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) connect()
+        }, delay)
+      }
+
+      ws.onerror = () => {
+        // onclose will fire after onerror, reconnect handled there
+      }
+
+      reconnectAttemptRef.current = 0
+    }
+
+    connect()
+
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+      if (wsRef.current) {
+        wsRef.current.onclose = null
+        wsRef.current.close()
+        wsRef.current = null
+      }
+    }
+  }, [isAuthenticated, isLoading, refreshJobs, upsertJob])
+
+  // Reset on logout
   useEffect(() => {
     if (!isAuthenticated) {
       setJobs([])
       setUnreadIds(new Set())
       previousStatusesRef.current = {}
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+      if (wsRef.current) {
+        wsRef.current.onclose = null
+        wsRef.current.close()
+        wsRef.current = null
+      }
     }
   }, [isAuthenticated])
 

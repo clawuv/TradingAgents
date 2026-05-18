@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import PlainTextResponse
 
 from app.api.deps import get_current_user, require_permission
+from app.core.db import SessionLocal
 from app.models.user import User
 from app.schemas.research import ResearchAnalysisSection, ResearchGenerateRequest, ResearchJobResponse, ResearchReportDetail, ResearchReportListItem
-from app.services.research_service import ResearchService
+from app.services.auth_service import AuthService
+from app.services.research_service import ResearchService, subscribe_job_updates, unsubscribe_job_updates
 
 
 router = APIRouter(prefix="/v1/research/reports", tags=["research"])
@@ -53,6 +55,39 @@ def serialize_job(job) -> ResearchJobResponse:
         started_at=job.started_at.isoformat() + "Z" if job.started_at else None,
         finished_at=job.finished_at.isoformat() + "Z" if job.finished_at else None,
     )
+
+
+@router.websocket("/ws")
+async def research_job_ws(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="missing token")
+        return
+
+    db = SessionLocal()
+    try:
+        user = AuthService(db).get_user_by_token(token)
+    finally:
+        db.close()
+
+    if user is None or user.status != "active":
+        await websocket.close(code=4001, reason="invalid or expired token")
+        return
+
+    await websocket.accept()
+    queue = subscribe_job_updates()
+    try:
+        while True:
+            job_data = await queue.get()
+            if job_data.get("user_id") != user.id:
+                continue
+            await websocket.send_json(job_data)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        unsubscribe_job_updates(queue)
 
 
 @router.get("", response_model=list[ResearchReportListItem], dependencies=[Depends(require_permission("research.view"))])
@@ -110,3 +145,10 @@ def download_research_report(report_id: str):
     filename = f"{report.ticker}_{report.report_date}.md"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return PlainTextResponse(report.content, media_type="text/markdown; charset=utf-8", headers=headers)
+
+
+@router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("research.delete"))])
+def delete_research_report(report_id: str):
+    deleted = ResearchService().delete_report(report_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="report not found")

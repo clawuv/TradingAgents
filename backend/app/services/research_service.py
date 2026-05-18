@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import json
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -24,6 +26,61 @@ COMPLETE_REPORT_DIR_RE = re.compile(r"^(?P<ticker>.+)_(?P<time>\d{6})$")
 RATING_RE = re.compile(r"\*\*Rating\*\*:\s*([A-Za-z]+)|Rating:\s*\**([A-Za-z]+)\**", re.IGNORECASE)
 EXECUTIVE_SUMMARY_RE = re.compile(r"\*\*Executive Summary\*\*:\s*(.+)")
 RUNNING_PROCESSES: dict[str, subprocess.Popen[str]] = {}
+
+_subscribers: list[asyncio.Queue] = []
+_subscribers_lock = threading.Lock()
+
+
+def subscribe_job_updates() -> asyncio.Queue:
+    q: asyncio.Queue = asyncio.Queue()
+    with _subscribers_lock:
+        _subscribers.append(q)
+    return q
+
+
+def unsubscribe_job_updates(q: asyncio.Queue) -> None:
+    with _subscribers_lock:
+        try:
+            _subscribers.remove(q)
+        except ValueError:
+            pass
+
+
+def _serialize_job_for_broadcast(job: ResearchJob) -> dict:
+    return {
+        "id": job.id,
+        "user_id": job.user_id,
+        "ticker": job.ticker,
+        "trade_date": job.trade_date,
+        "status": job.status,
+        "report_id": job.report_id,
+        "error_message": job.error_message,
+        "created_at": job.created_at.isoformat() + "Z",
+        "started_at": job.started_at.isoformat() + "Z" if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() + "Z" if job.finished_at else None,
+    }
+
+
+def broadcast_job_update(job_data: dict) -> None:
+    with _subscribers_lock:
+        targets = list(_subscribers)
+    for q in targets:
+        try:
+            q.put_nowait(job_data)
+        except asyncio.QueueFull:
+            pass
+
+
+def _broadcast_from_thread(job: ResearchJob) -> None:
+    data = _serialize_job_for_broadcast(job)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.call_soon_threadsafe(broadcast_job_update, data)
+        else:
+            broadcast_job_update(data)
+    except RuntimeError:
+        broadcast_job_update(data)
 
 COMPLETE_ANALYSIS_SECTION_SPECS = [
     (
@@ -149,6 +206,38 @@ class ResearchService:
                 return report
         return None
 
+    def delete_report(self, report_id: str) -> bool:
+        report_dir = self._resolve_report_dir(report_id)
+        if report_dir is None or not report_dir.exists():
+            return False
+        shutil.rmtree(report_dir)
+        return True
+
+    def _resolve_report_dir(self, report_id: str) -> Path | None:
+        parts = report_id.split("::", 2)
+        if len(parts) != 3:
+            return None
+        source_type, ticker, date_part = parts
+        if source_type == "complete":
+            try:
+                date_dir_name = datetime.strptime(date_part, "%Y-%m-%d").strftime("%Y%m%d")
+            except ValueError:
+                return None
+            parent_dir = WORKSPACE_REPORTS_DIR / date_dir_name
+            if not parent_dir.exists():
+                return None
+            for child in parent_dir.iterdir():
+                if child.is_dir() and child.name.upper().startswith(ticker.upper() + "_"):
+                    return child
+            return None
+        if source_type == "runtime":
+            ticker_dir = HOME_LOGS_DIR / ticker.upper()
+            date_dir = ticker_dir / date_part
+            if date_dir.exists():
+                return date_dir
+            return None
+        return None
+
     def generate_report(self, payload: ResearchGenerateRequest) -> tuple[ResearchReportRecord, str]:
         result = self._run_generation_subprocess(payload=payload)
         report_path = Path(result["report_path"])
@@ -241,6 +330,7 @@ class ResearchService:
             db.commit()
             db.refresh(job)
             db.expunge(job)
+            _broadcast_from_thread(job)
             return job
         finally:
             db.close()
@@ -520,6 +610,8 @@ print(json.dumps({"report_path": str(report_path), "decision": decision}, ensure
             job.started_at = datetime.utcnow()
             db.add(job)
             db.commit()
+            db.refresh(job)
+            _broadcast_from_thread(job)
 
             payload = ResearchGenerateRequest(**job.request_payload)
             try:
@@ -545,5 +637,8 @@ print(json.dumps({"report_path": str(report_path), "decision": decision}, ensure
 
             db.add(job)
             db.commit()
+            db.refresh(job)
+            if job.status in ("completed", "failed"):
+                _broadcast_from_thread(job)
         finally:
             db.close()

@@ -3,6 +3,18 @@ import axios from 'axios'
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8010'
 const AUTH_TOKEN_KEY = 'backend_access_token'
 
+export const RESEARCH_WS_PATH = '/v1/research/reports/ws'
+
+function resolveBaseUrl(): string {
+  return import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL
+}
+
+export function getResearchWsUrl(token: string): string {
+  const base = resolveBaseUrl()
+  const wsBase = base.replace(/^http/, 'ws')
+  return `${wsBase}${RESEARCH_WS_PATH}?token=${encodeURIComponent(token)}`
+}
+
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL,
   timeout: 10_000,
@@ -431,6 +443,10 @@ export async function downloadResearchReport(reportId: string) {
     responseType: 'text',
   })
   return data
+}
+
+export async function deleteResearchReport(reportId: string) {
+  await apiClient.delete(`/v1/research/reports/${encodeURIComponent(reportId)}`)
 }
 
 export async function listAssets() {

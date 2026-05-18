@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bookmark, BookOpenCheck, Bot, Calendar, ChevronDown, Download, Eye, FileText, Plus, Radio, RefreshCw, Search, Settings2, Sparkles, TrendingUp } from 'lucide-react'
+import { Bookmark, BookOpenCheck, Bot, Calendar, ChevronDown, Download, Eye, FileText, Plus, Radio, RefreshCw, Search, Settings2, Sparkles, Trash2, TrendingUp } from 'lucide-react'
 import { Streamdown } from 'streamdown'
 import { toast } from 'sonner'
 import StatCard from '@/components/common/StatCard'
@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useResearchNotifications } from '@/contexts/ResearchNotificationsContext'
 import { consumePendingResearchJobError, consumePendingResearchReportId } from '@/lib/research-notification'
 import {
+  deleteResearchReport,
   downloadResearchReport,
   generateResearchReport,
   getApiErrorMessage,
@@ -63,6 +64,8 @@ export default function Research() {
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [analysisSection, setAnalysisSection] = useState<ResearchAnalysisSection | null>(null)
   const [analysisReportTitle, setAnalysisReportTitle] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<ResearchReportListItem | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [generateTicker, setGenerateTicker] = useState('')
   const [generateDate, setGenerateDate] = useState(new Date().toISOString().slice(0, 10))
@@ -287,6 +290,30 @@ export default function Research() {
     }
   }
 
+  const confirmDelete = (report: ResearchReportListItem) => {
+    setDeleteTarget(report)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteResearchReport(deleteTarget.id)
+      toast.success(`${deleteTarget.title} 已删除`)
+      if (selected?.id === deleteTarget.id) {
+        setSelected(null)
+        setPreviewOpen(false)
+      }
+      setDeleteTarget(null)
+      await loadReports()
+    } catch (err) {
+      const msg = getApiErrorMessage(err)
+      toast.error(msg)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const columns: Column<ResearchReportListItem>[] = [
     {
       key: 'title',
@@ -361,6 +388,14 @@ export default function Research() {
           >
             <Bookmark className="mr-1 inline h-4 w-4" />
             {bookmarkedIds.has(row.id) ? '已藏' : '收藏'}
+          </button>
+          <button
+            disabled={!can('research.delete')}
+            className="rounded-lg bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => confirmDelete(row)}
+          >
+            <Trash2 className="mr-1 inline h-4 w-4" />
+            删除
           </button>
         </div>
       ),
@@ -708,6 +743,29 @@ export default function Research() {
               className="rounded-2xl bg-slate-950 px-6 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {generating ? '生成中...' : '开始生成研报'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTarget != null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="rounded-[28px] border-slate-200 bg-white p-0 shadow-2xl sm:max-w-md">
+          <DialogHeader className="px-8 pb-2 pt-6">
+            <DialogTitle className="text-xl font-bold text-slate-950">确认删除研报</DialogTitle>
+            <DialogDescription className="mt-2 text-sm text-slate-500">
+              确定要删除「{deleteTarget?.title}」吗？此操作将移除报告文件且无法恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-3 px-8 pb-6 pt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="rounded-2xl border-slate-200">
+              取消
+            </Button>
+            <Button
+              onClick={() => void handleDelete()}
+              disabled={deleting}
+              className="rounded-2xl bg-rose-600 px-5 text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+            >
+              {deleting ? '删除中...' : '确认删除'}
             </Button>
           </DialogFooter>
         </DialogContent>
