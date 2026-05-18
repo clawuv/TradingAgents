@@ -1,11 +1,14 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 
+# Resolve the backend package root (two levels up from this file: core/ -> app/ -> backend/)
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
     app_name: str = "backend"
     env: str = "dev"
-    database_url: str = "sqlite+pysqlite:///./data/trading_platform.db"
+    database_url: str = f"sqlite+pysqlite:///{_BACKEND_ROOT / 'data' / 'trading_platform.db'}"
     default_account_id: str = "paper-main"
     max_single_position_pct: float = 0.05
     max_total_exposure_pct: float = 0.30

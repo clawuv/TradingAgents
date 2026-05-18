@@ -538,6 +538,17 @@ repo_root = Path(payload["repo_root"])
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
+# Load environment variables from repo root .env (API keys, proxy settings, etc.)
+# This is critical: the subprocess does not inherit the backend's loaded env,
+# so without this, DEEPSEEK_API_KEY, HTTP_PROXY and other vars are missing,
+# causing LLM calls to fail with auth errors or timeout, making generation very slow.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(repo_root / ".env")
+    load_dotenv(repo_root / ".env.enterprise", override=False)
+except ImportError:
+    pass  # dotenv not available, rely on OS environment
+
 from cli.main import save_report_to_disk
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.trading_graph import TradingAgentsGraph
