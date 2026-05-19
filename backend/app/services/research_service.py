@@ -7,8 +7,6 @@ from pathlib import Path
 import json
 import re
 import shutil
-import subprocess
-import sys
 import threading
 import uuid
 
@@ -25,7 +23,7 @@ HOME_LOGS_DIR = Path.home() / ".tradingagents" / "logs"
 COMPLETE_REPORT_DIR_RE = re.compile(r"^(?P<ticker>.+)_(?P<time>\d{6})$")
 RATING_RE = re.compile(r"\*\*Rating\*\*:\s*([A-Za-z]+)|Rating:\s*\**([A-Za-z]+)\**", re.IGNORECASE)
 EXECUTIVE_SUMMARY_RE = re.compile(r"\*\*Executive Summary\*\*:\s*(.+)")
-RUNNING_PROCESSES: dict[str, subprocess.Popen[str]] = {}
+CANCEL_EVENTS: dict[str, threading.Event] = {}
 
 _subscribers: list[asyncio.Queue] = []
 _subscribers_lock = threading.Lock()
@@ -239,7 +237,7 @@ class ResearchService:
         return None
 
     def generate_report(self, payload: ResearchGenerateRequest) -> tuple[ResearchReportRecord, str]:
-        result = self._run_generation_subprocess(payload=payload)
+        result = self._run_generation_inprocess(payload=payload)
         report_path = Path(result["report_path"])
         report = self._build_complete_report(report_path)
         if report is None:
@@ -319,9 +317,9 @@ class ResearchService:
             if job.status in {"completed", "failed", "cancelled"}:
                 raise ValueError("job can no longer be cancelled")
 
-            process = RUNNING_PROCESSES.get(job_id)
-            if process is not None and process.poll() is None:
-                process.terminate()
+            cancel_event = CANCEL_EVENTS.get(job_id)
+            if cancel_event is not None:
+                cancel_event.set()
 
             job.status = "cancelled"
             job.error_message = "任务已由用户取消"
@@ -517,101 +515,43 @@ class ResearchService:
     def _format_timestamp(self, timestamp: float) -> str:
         return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
-    def _resolve_runner_python(self) -> str:
-        configured = Path(settings.resolved_research_runner_python)
-        if configured.exists():
-            return str(configured)
-        return sys.executable
-
     def _normalize_output_language(self, value: str) -> str:
         return {"中文": "Chinese", "english": "English", "english ": "English"}.get(value.strip().lower(), value)
 
-    def _generation_script(self) -> str:
-        return """
-import json
-import sys
-from datetime import datetime
-from pathlib import Path
+    def _run_generation_inprocess(self, *, payload: ResearchGenerateRequest, job_id: str | None = None) -> dict:
+        from cli.main import save_report_to_disk
+        from tradingagents.default_config import DEFAULT_CONFIG
+        from tradingagents.graph.trading_graph import TradingAgentsGraph
 
-payload = json.loads(sys.argv[1])
-repo_root = Path(payload["repo_root"])
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+        config = DEFAULT_CONFIG.copy()
+        config.update({
+            "output_language": self._normalize_output_language(payload.output_language),
+            "llm_provider": payload.llm_provider,
+            "quick_think_llm": payload.quick_think_llm,
+            "deep_think_llm": payload.deep_think_llm,
+            "max_debate_rounds": payload.max_debate_rounds,
+            "max_risk_discuss_rounds": payload.max_risk_discuss_rounds,
+            "checkpoint_enabled": payload.checkpoint_enabled,
+        })
 
-# Load environment variables from repo root .env (API keys, proxy settings, etc.)
-# This is critical: the subprocess does not inherit the backend's loaded env,
-# so without this, DEEPSEEK_API_KEY, HTTP_PROXY and other vars are missing,
-# causing LLM calls to fail with auth errors or timeout, making generation very slow.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(repo_root / ".env")
-    load_dotenv(repo_root / ".env.enterprise", override=False)
-except ImportError:
-    pass  # dotenv not available, rely on OS environment
+        ticker = payload.ticker.strip().upper()
+        trade_date = payload.trade_date
 
-from cli.main import save_report_to_disk
-from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-
-config = DEFAULT_CONFIG.copy()
-config.update(payload["config_overrides"])
-ticker = payload["ticker"].strip().upper()
-trade_date = payload["trade_date"]
-graph = TradingAgentsGraph(
-    selected_analysts=payload["selected_analysts"],
-    debug=False,
-    config=config,
-)
-final_state, decision = graph.propagate(ticker, trade_date)
-save_path = repo_root / "tradingagents" / "reports" / trade_date.replace("-", "") / f"{ticker}_{datetime.now().strftime('%H%M%S')}"
-report_path = save_report_to_disk(final_state, ticker, save_path)
-print(json.dumps({"report_path": str(report_path), "decision": decision}, ensure_ascii=False))
-""".strip()
-
-    def _build_generation_payload(self, payload: ResearchGenerateRequest) -> dict:
-        return {
-            "ticker": payload.ticker.strip().upper(),
-            "trade_date": payload.trade_date,
-            "selected_analysts": payload.selected_analysts,
-            "config_overrides": {
-                "output_language": self._normalize_output_language(payload.output_language),
-                "llm_provider": payload.llm_provider,
-                "quick_think_llm": payload.quick_think_llm,
-                "deep_think_llm": payload.deep_think_llm,
-                "max_debate_rounds": payload.max_debate_rounds,
-                "max_risk_discuss_rounds": payload.max_risk_discuss_rounds,
-                "checkpoint_enabled": payload.checkpoint_enabled,
-            },
-            "repo_root": str(REPO_ROOT),
-        }
-
-    def _run_generation_subprocess(self, *, payload: ResearchGenerateRequest, job_id: str | None = None) -> dict:
-        request_payload = self._build_generation_payload(payload)
-        process = subprocess.Popen(
-            [self._resolve_runner_python(), "-c", self._generation_script(), json.dumps(request_payload)],
-            cwd=REPO_ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        graph = TradingAgentsGraph(
+            selected_analysts=payload.selected_analysts,
+            debug=False,
+            config=config,
         )
-        if job_id:
-            RUNNING_PROCESSES[job_id] = process
-        try:
-            stdout, stderr = process.communicate(timeout=settings.research_generation_timeout_seconds)
-        finally:
-            if job_id:
-                RUNNING_PROCESSES.pop(job_id, None)
+        final_state, decision = graph.propagate(ticker, trade_date)
 
-        if process.returncode != 0:
-            stderr_text = (stderr or stdout or "research generation failed").strip()
-            raise RuntimeError(stderr_text)
-
-        try:
-            return json.loads(stdout.strip().splitlines()[-1])
-        except (IndexError, json.JSONDecodeError) as exc:
-            raise RuntimeError("research generation returned an invalid payload") from exc
+        save_path = REPO_ROOT / "tradingagents" / "reports" / trade_date.replace("-", "") / f"{ticker}_{datetime.now().strftime('%H%M%S')}"
+        report_path = save_report_to_disk(final_state, ticker, save_path)
+        return {"report_path": str(report_path), "decision": decision}
 
     def _run_generation_job(self, job_id: str) -> None:
+        cancel_event = threading.Event()
+        CANCEL_EVENTS[job_id] = cancel_event
+
         db = SessionLocal()
         try:
             job = db.get(ResearchJob, job_id)
@@ -624,15 +564,18 @@ print(json.dumps({"report_path": str(report_path), "decision": decision}, ensure
             db.refresh(job)
             _broadcast_from_thread(job)
 
+            if cancel_event.is_set():
+                return
+
             payload = ResearchGenerateRequest(**job.request_payload)
             try:
-                result = self._run_generation_subprocess(payload=payload, job_id=job_id)
+                result = self._run_generation_inprocess(payload=payload, job_id=job_id)
                 report = self._build_complete_report(Path(result["report_path"]))
                 if report is None:
                     raise RuntimeError("generated report could not be loaded")
                 decision = str(result.get("decision", "")).strip()
                 db.refresh(job)
-                if job.status == "cancelled":
+                if job.status == "cancelled" or cancel_event.is_set():
                     return
                 job.status = "completed"
                 job.decision = decision
@@ -652,4 +595,5 @@ print(json.dumps({"report_path": str(report_path), "decision": decision}, ensure
             if job.status in ("completed", "failed"):
                 _broadcast_from_thread(job)
         finally:
+            CANCEL_EVENTS.pop(job_id, None)
             db.close()

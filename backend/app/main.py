@@ -1,3 +1,7 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from app.api.routes.auth import router as auth_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +19,26 @@ from app.api.routes.snapshots import router as snapshots_router
 from app.api.routes.users import router as users_router
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
-app = FastAPI(title=settings.app_name)
+
+def _prewarm_imports() -> None:
+    logger.info("Pre-warming tradingagents imports...")
+    try:
+        import tradingagents.graph.trading_graph  # noqa: F401
+        from cli.main import save_report_to_disk  # noqa: F401
+        logger.info("Pre-warming complete.")
+    except Exception:
+        logger.warning("Pre-warming failed (will import lazily on first request)", exc_info=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.get_event_loop().run_in_executor(None, _prewarm_imports)
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
